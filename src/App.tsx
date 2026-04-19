@@ -31,6 +31,10 @@ function App() {
     });
   }, []);
 
+  const handleRename = useCallback((id: string, newName: string) => {
+    setImages(prev => prev.map(img => img.id === id ? { ...img, customName: newName } : img));
+  }, []);
+
   const clearAll = useCallback(() => {
     images.forEach(img => URL.revokeObjectURL(img.preview));
     setImages([]);
@@ -45,6 +49,7 @@ function App() {
 
     const CONCURRENCY_LIMIT = 3;
     const queue = [...imagesToProcess];
+    const nameMap = new Map<string, number>();
 
     const processNext = async () => {
       if (queue.length === 0) return;
@@ -53,12 +58,31 @@ function App() {
       setImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'processing' } : i));
 
       try {
+        const extension = settings.fileType === 'image/webp' ? '.webp' : 
+                          settings.fileType === 'image/png' ? '.png' : '.jpg';
+        
+        let baseName = img.customName || img.file.name.replace(/\.[^/.]+$/, "");
+        
+        // Handle global name collision in the batch
+        let finalBaseName = baseName;
+        const count = nameMap.get(baseName) || 0;
+        if (count > 0) {
+          finalBaseName = `${baseName}-${count}`;
+        }
+        nameMap.set(baseName, count + 1);
+
+        const fileName = `${finalBaseName}${extension}`;
+
         const compressed = await compressImage(img.file, settings);
+        
+        // Final polish for naming
+        const finalFile = new File([compressed], fileName, { type: compressed.type });
+
         setImages(prev => prev.map(i => i.id === img.id ? {
           ...i,
           status: 'done',
-          compressedFile: compressed,
-          compressedSize: compressed.size,
+          compressedFile: finalFile,
+          compressedSize: finalFile.size,
         } : i));
       } catch (error) {
         setImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'error' } : i));
@@ -109,7 +133,7 @@ function App() {
         <header className="header" style={{ padding: '0 0 1rem 0', flexDirection: 'column', alignItems: 'stretch' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h1 className="logo">BulkCompress</h1>
+              <h1 className="logo">Image Compressor</h1>
               <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
                 Batch optimize your images with a single click
               </p>
@@ -120,7 +144,7 @@ function App() {
                    <Trash2 size={18} /> Clear All
                  </button>
                )}
-               {images.some(img => img.status === 'done') && (
+               {images.length > 0 && images.every(img => img.status === 'done') && (
                  <button className="btn btn-primary" onClick={downloadAll}>
                    <Download size={18} /> Download All (ZIP)
                  </button>
@@ -161,6 +185,7 @@ function App() {
                   image={img} 
                   onRemove={handleRemove} 
                   onDownload={downloadImage}
+                  onRename={handleRename}
                 />
               ))}
             </div>

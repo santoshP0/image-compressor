@@ -9,15 +9,20 @@ export interface ImageFile {
   status: 'pending' | 'processing' | 'done' | 'error';
   originalSize: number;
   compressedSize?: number;
+  customName?: string;
 }
 
 interface ImageItemProps {
   image: ImageFile;
   onRemove: (id: string) => void;
   onDownload: (image: ImageFile) => void;
+  onRename: (id: string, newName: string) => void;
 }
 
-export const ImageItem: React.FC<ImageItemProps> = ({ image, onRemove, onDownload }) => {
+export const ImageItem: React.FC<ImageItemProps> = ({ image, onRemove, onDownload, onRename }) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editValue, setEditValue] = React.useState(image.customName || image.file.name.replace(/\.[^/.]+$/, ""));
+
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -33,6 +38,19 @@ export const ImageItem: React.FC<ImageItemProps> = ({ image, onRemove, onDownloa
     return percent > 0 ? `${percent}%` : null;
   }, [image.originalSize, image.compressedSize]);
 
+  const handleRenameSubmit = () => {
+    onRename(image.id, editValue);
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleRenameSubmit();
+    if (e.key === 'Escape') {
+      setEditValue(image.customName || image.file.name.replace(/\.[^/.]+$/, ""));
+      setIsEditing(false);
+    }
+  };
+
   return (
     <div className="glass-card image-card">
       <button 
@@ -46,10 +64,26 @@ export const ImageItem: React.FC<ImageItemProps> = ({ image, onRemove, onDownloa
       <img src={image.preview} alt={image.file.name} className="image-preview" />
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>
-            {image.file.name}
-          </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', minHeight: '1.25rem' }}>
+          {isEditing ? (
+            <input
+              autoFocus
+              className="input-group"
+              style={{ fontSize: '0.875rem', padding: '0.2rem', background: 'rgba(255,255,255,0.1)', border: '1px solid var(--accent-color)', borderRadius: '0.25rem', width: '70%' }}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleRenameSubmit}
+              onKeyDown={handleKeyDown}
+            />
+          ) : (
+            <span 
+              onClick={() => setIsEditing(true)}
+              title="Click to rename"
+              style={{ fontSize: '0.875rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px', cursor: 'pointer', borderBottom: '1px dashed var(--panel-border)' }}
+            >
+              {image.customName || image.file.name}
+            </span>
+          )}
           <span className={`status-tag status-${image.status}`}>
             {image.status}
           </span>
